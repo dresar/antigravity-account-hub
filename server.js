@@ -206,6 +206,15 @@ app.post('/api/auth/start-login', authenticateRequest, async (req, res) => {
   ensureGlobalSymlink();
 
   const sessionId = `login_${Date.now()}`;
+
+  // VPS-local mode: kalau token lama masih ada, agy langsung masuk sesi lama
+  // dan TIDAK menampilkan URL login baru → capture gagal ("Gagal mendapatkan
+  // tautan"). Menghapus token lama = ganti akun: pty pasti menampilkan URL OAuth.
+  if (LOCAL_MODE) {
+    const staleToken = path.join(PRIMARY_GEMINI_DIR, 'antigravity-cli', 'antigravity-oauth-token');
+    if (fs.existsSync(staleToken)) fs.rmSync(staleToken, { force: true });
+  }
+
   const isWindows = os.platform() === 'win32';
   const spawnCmd = isWindows ? 'cmd.exe' : 'bash';
   const spawnArgs = isWindows
@@ -311,7 +320,11 @@ app.post('/api/auth/submit-code', authenticateRequest, async (req, res) => {
     return res.status(404).json({ error: 'Sesi login telah kedaluwarsa. Silakan mulai kembali.' });
   }
 
-  const cleanCode = code.trim();
+  const rawInput = code.trim();
+  // Toleransi: user bisa menyalin kode polos ("4/1AA...") ATAU keseluruhan
+  // tautan callback (?code=...) — extract parameternya sebelum masuk ke CLI.
+  const codeParamMatch = rawInput.match(/[?&]code=([A-Za-z0-9._~\-%+/]+)/);
+  const cleanCode = codeParamMatch ? codeParamMatch[1] : rawInput.replace(/[\r\n]+/g, ' ').trim();
   session.ptyProcess.write(`${cleanCode}\r\n`);
 
   const verificationPromise = new Promise((resolve) => {
@@ -322,20 +335,35 @@ app.post('/api/auth/submit-code', authenticateRequest, async (req, res) => {
       const isBufferSuccess = session.buffer.includes('Signed in') || session.buffer.includes('Welcome') || session.buffer.includes('signed in');
       const isBufferError = session.buffer.includes('invalid') || session.buffer.includes('Invalid') || session.buffer.includes('failed to authenticate');
 
-      if (hasToken || isBufferSuccess) {
+      // Hanya anggap sukses ketika file token BENERAN terdeteksi di disk, bukan cuma
+      // berdasarkan teks buffer — agar CLI sempat menyelesaikan pertukaran kode
+      // otorisasi Google sebelum kita memotong prosesnya.
+      if (hasToken) {
         clearInterval(interval);
         resolve({ success: true });
       } else if (isBufferError && checkCount >= 4) {
         clearInterval(interval);
         resolve({ success: false, error: 'Kode otorisasi yang dimasukkan tidak valid atau sudah kedaluwarsa' });
-      } else if (checkCount >= 12) {
+      } else if (checkCount >= 25) {
         clearInterval(interval);
-        resolve({ success: hasToken, error: 'Waktu tunggu verifikasi telah habis' });
+        resolve({ success: isBufferSuccess, error: 'Waktu tunggu verifikasi telah habis' });
       }
     }, 1000);
   });
 
   const verificationResult = await verificationPromise;
+
+  // Jendela pengaman: kalau buffer sudah menunjukkan sukses CLI tapi file token
+  // belum juga muncul, beri proses tambahan hingga 8 detik lagi untuk menulis
+  // kredensialnya ke disk SEBELUM pty-nya dimatikan (ini akar masalah sebelumnya:
+  // kill terlalu cepat = token hilang).
+  if (verificationResult.success && !isPrimaryAuthenticated()) {
+    let graceTicks = 0;
+    while (!isPrimaryAuthenticated() && graceTicks < 8) {
+      await new Promise((r) => setTimeout(r, 1000));
+      graceTicks++;
+    }
+  }
 
   let detectedEmail = (email || session.emailDraft || '').trim();
   const emailMatch = session.buffer.match(/Signed in as\s+([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
@@ -349,9 +377,13 @@ app.post('/api/auth/submit-code', authenticateRequest, async (req, res) => {
   pendingLoginSessions.delete(sessionId);
 
   if (verificationResult.success) {
+    // Ambil email asli dari JWT token yang barusan tersimpan (lebih akurat
+    // daripada menebak dari teks buffer)
+    const decoded = decodeGoogleIdToken();
     const identity = readIdentity();
-    identity.email = detectedEmail || identity.email || 'Akun Google Terverifikasi';
-    if (name) identity.name = name.trim();
+    identity.email = decoded.email || detectedEmail || identity.email || 'Akun Google Terverifikasi';
+    if (decoded.name) identity.name = decoded.name;
+    else if (name) identity.name = name.trim();
     identity.status = 'connected';
     identity.createdAt = new Date().toISOString();
     identity.lastVerifiedAt = new Date().toISOString();
