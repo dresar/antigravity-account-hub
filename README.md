@@ -1,58 +1,36 @@
-# Antigravity Remote Web Hub
+# Antigravity Account Hub
 
-Aplikasi web modern untuk meremote Antigravity CLI (`agy`) langsung dari browser dengan manajemen multi-akun instan tanpa perlu login-logout berulang di terminal SSH.
+Aplikasi Web GUI modern khusus untuk manajemen multi-akun Google OAuth dan otentikasi Antigravity CLI (`agy`) di VPS Ubuntu. Tanpa tampilan terminal CLI mentah, semua proses login, logout, dan perpindahan akun dilakukan 100% melalui antarmuka web grafis yang bersih.
 
 ## Fitur Utama
 
-- **Realtime Web Terminal**: Antarmuka terminal interaktif bertenaga `xterm.js` dan `node-pty` dengan dukungan warna ANSI, kursor, dan link URL OAuth yang dapat diklik langsung.
-- **Multi-Account Profile Switcher**: Gonta-ganti akun Google / Antigravity dengan 1 klik dari dropdown menu. Setiap akun memiliki direktori environment `$HOME/.gemini` yang terisolasi sepenuhnya.
-- **Session Persistence (tmux)**: Sesi CLI tetap hidup di background VPS saat tab browser ditutup atau koneksi internet perangkat terputus.
-- **Mobile Friendly Controls**: Dilengkapi tombol bantuan keyboard (ESC, TAB, Ctrl+C, Ctrl+D, Enter, panah navigasi) dan shortcut slash commands (`/plan`, `/goal`, `/help`, `/clear`).
-- **Keamanan Terproteksi**: Proteksi otentikasi Master PIN dan websocket handshake guard.
+- **100% Tampilan GUI Grafis**: Alur login dan manajemen akun dilakukan murni menggunakan kartu akun, tombol interaktif, dan modal wizard, bukan terminal CLI hitam.
+- **Automated OAuth Interceptor**: Backend secara otomatis menangkap URL resmi otentikasi Google dari CLI dan menyediakan tombol otorisasi langsung bagi pengguna.
+- **One-Click Account Switcher**: Berganti akun aktif di VPS dengan 1 klik tombol `Gunakan Akun`. Sistem otomatis menyinkronkan profil kredensial ke `/root/.gemini/antigravity-cli`.
+- **Token Health Check**: Fitur pengujian langsung untuk memastikan kredensial akun aktif valid dan siap digunakan oleh Antigravity CLI.
+- **Logout & Profil Isolasi**: Tiap akun memiliki direktori environment terisolasi (`/DATA/AppData/antigravity-hub/profiles/<id>`) sehingga sesi akun tidak pernah bercampur atau tertimpa.
+- **Master PIN Guard**: Seluruh dashboard diproteksi dengan Master PIN demi keamanan di VPS publik.
 
-## Akses Aplikasi
-
-- **Direct Web URL**: `http://103.253.213.185:3838`
-- **Master PIN**: `16799`
-- **Nginx Reverse Proxy**: Dikonfigurasi untuk domain `agy.serverinka.cloud` (port 80/443 SSL)
-
-## Struktur Direktori
+## Konfigurasi Environment (`.env`)
 
 ```text
-/DATA/AppData/antigravity-hub/
-├── data/
-│   └── profiles.json
-├── profiles/
-│   ├── default/
-│   │   └── .gemini/
-│   └── <profile-id>/
-├── public/
-│   ├── app.js
-│   ├── index.html
-│   └── style.css
-├── .env
-├── package.json
-└── server.js
+PORT=3838
+AUTH_PIN=16799
+PROFILES_DIR=/DATA/AppData/antigravity-hub/profiles
+DATA_DIR=/DATA/AppData/antigravity-hub/data
 ```
 
-## Perintah Manajemen Layanan (VPS)
+## Alur Login Akun Baru di Web
 
-- Cek status daemon:
-  ```bash
-  systemctl status antigravity-hub
-  ```
+1. Klik tombol **Tambah Akun**.
+2. Masukkan label nama akun (misal: *Akun Cadangan 1*).
+3. Klik tombol **Dapatkan Link Login**; sistem akan menampilkan tombol otorisasi Google resmi.
+4. Klik tombol Google, berikan izin akses, dan salin kode otorisasi (`4/0A...`).
+5. Tempel kode otorisasi ke formulir web dan klik **Verifikasi & Simpan Akun**.
+6. Akun langsung aktif dan siap digunakan di seluruh perintah VPS!
 
-- Restart daemon:
-  ```bash
-  systemctl restart antigravity-hub
-  ```
+## Akses Layanan
 
-- Lihat live logs:
-  ```bash
-  journalctl -u antigravity-hub -f
-  ```
-
-- Cek sesi tmux aktif:
-  ```bash
-  tmux list-sessions
-  ```
+- **URL Dashboard**: `http://103.253.213.185:3838`
+- **Domain SSL**: `https://agy.serverinka.cloud` *(jika CNAME agy diarahkan di Cloudflare)*
+- **Master PIN**: `16799`

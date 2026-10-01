@@ -2,14 +2,10 @@
 <html lang="id" class="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Antigravity Remote Hub</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Antigravity Account Hub - Manajemen Multi-Akun VPS</title>
   <link rel="stylesheet" href="/style.css">
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script>
     tailwind.config = {
@@ -21,27 +17,28 @@
               50: '#eff6ff',
               500: '#3b82f6',
               600: '#2563eb',
-              700: '#1d4ed8',
-              900: '#1e3a8a'
+              700: '#1d4ed8'
             },
-            darkbg: '#0d1117',
-            panelbg: '#161b22',
-            bordercol: '#30363d'
+            darkbg: '#0a0d14',
+            cardbg: '#121722',
+            panelbg: '#171e2c',
+            bordercol: '#242f44',
+            borderlight: '#313e59'
           }
         }
       }
     }
   </script>
 </head>
-<body class="bg-[#090d16] text-slate-100 flex flex-col h-screen overflow-hidden font-sans select-none antialiased">
+<body class="bg-darkbg text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-brand-500/30 selection:text-white">
 
-  <div id="authOverlay" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-    <div class="bg-panelbg border border-bordercol rounded-2xl p-6 md:p-8 max-w-sm w-full shadow-2xl text-center">
-      <div class="inline-flex p-3 rounded-2xl bg-brand-500/10 text-brand-500 mb-4">
+  <div id="authOverlay" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+    <div class="bg-cardbg border border-bordercol rounded-2xl p-6 sm:p-8 max-w-sm w-full shadow-2xl text-center">
+      <div class="inline-flex p-3 rounded-2xl bg-brand-500/10 text-brand-500 mb-4 ring-1 ring-brand-500/20">
         <i data-lucide="shield-check" class="w-8 h-8"></i>
       </div>
-      <h2 class="text-xl font-bold tracking-tight text-white mb-1">Antigravity Remote</h2>
-      <p class="text-xs text-slate-400 mb-6">Masukkan Master PIN untuk mengakses VPS</p>
+      <h2 class="text-xl font-bold tracking-tight text-white mb-1">Antigravity Account Hub</h2>
+      <p class="text-xs text-slate-400 mb-6">Masukkan Master PIN untuk mengelola akun Antigravity di VPS</p>
       <form id="authForm" class="space-y-4">
         <input 
           type="password" 
@@ -55,190 +52,273 @@
         <button 
           type="submit" 
           id="btnAuthSubmit"
-          class="w-full py-3 px-4 bg-brand-600 hover:bg-brand-500 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2 text-sm shadow-lg shadow-brand-500/20 active:scale-[0.98]"
+          class="w-full py-2.5 px-4 bg-brand-600 hover:bg-brand-500 text-white font-medium rounded-xl transition-all flex items-center justify-center gap-2 text-xs shadow-lg shadow-brand-500/20 active:scale-[0.98]"
         >
           <span>Masuk Dashboard</span>
-          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+          <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
         </button>
       </form>
       <p id="authError" class="text-xs text-rose-500 mt-3 hidden font-medium"></p>
     </div>
   </div>
 
-  <header class="bg-panelbg/90 backdrop-blur border-b border-bordercol px-4 py-2.5 flex items-center justify-between shrink-0 z-20">
+  <header class="bg-cardbg/80 backdrop-blur border-b border-bordercol px-4 sm:px-8 py-3.5 flex items-center justify-between sticky top-0 z-30">
     <div class="flex items-center gap-3">
-      <div class="flex items-center gap-2">
-        <div class="w-7 h-7 rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-black text-xs text-white shadow-md shadow-blue-500/30">
-          AG
-        </div>
-        <span class="font-bold text-sm tracking-tight text-slate-200 hidden sm:inline">Antigravity Remote</span>
+      <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-black text-xs text-white shadow-md shadow-blue-500/20">
+        AG
       </div>
-
-      <div class="h-4 w-px bg-bordercol hidden sm:block"></div>
-
-      <div class="flex items-center gap-1.5">
-        <label for="profileSelect" class="text-xs text-slate-400 hidden md:inline">Akun:</label>
-        <div class="relative">
-          <select 
-            id="profileSelect" 
-            class="bg-darkbg text-xs font-medium text-slate-200 border border-bordercol rounded-lg pl-2.5 pr-8 py-1.5 appearance-none focus:outline-none focus:border-brand-500 transition-colors cursor-pointer hover:border-slate-500"
-          >
-          </select>
-          <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="font-bold text-sm tracking-tight text-white">Antigravity Account Hub</h1>
+          <span class="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20">VPS Manager</span>
         </div>
-
-        <button 
-          id="btnOpenNewProfileModal"
-          title="Tambah Akun Baru"
-          class="p-1.5 rounded-lg bg-darkbg border border-bordercol hover:border-slate-500 text-slate-300 hover:text-white transition-colors text-xs flex items-center gap-1 px-2 font-medium"
-        >
-          <i data-lucide="user-plus" class="w-3.5 h-3.5 text-brand-500"></i>
-          <span class="hidden lg:inline text-[11px]">+ Akun</span>
-        </button>
-
-        <button 
-          id="btnOpenManageProfilesModal"
-          title="Kelola Profil Akun"
-          class="p-1.5 rounded-lg bg-darkbg border border-bordercol hover:border-slate-500 text-slate-300 hover:text-white transition-colors"
-        >
-          <i data-lucide="users" class="w-3.5 h-3.5"></i>
-        </button>
+        <p class="text-[11px] text-slate-400 hidden sm:block">Kelola login & gonta-ganti akun Google untuk Antigravity CLI</p>
       </div>
     </div>
 
     <div class="flex items-center gap-2">
-      <div id="connStatusBadge" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
-        <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-        <span id="connStatusText">Connecting</span>
-      </div>
-
       <button 
-        id="btnRestartSession" 
-        title="Reset & Restart Sesi Terminal"
-        class="p-1.5 rounded-lg bg-darkbg border border-bordercol hover:border-amber-500/50 text-slate-300 hover:text-amber-400 transition-colors flex items-center gap-1 px-2 text-xs"
+        id="btnOpenNewAccountModal"
+        class="h-8 px-3 rounded-lg bg-brand-600 hover:bg-brand-500 text-white font-medium text-xs flex items-center gap-1.5 transition-all shadow-md shadow-brand-500/20 active:scale-95"
       >
-        <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
-        <span class="hidden md:inline text-[11px]">Restart Sesi</span>
+        <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+        <span>Tambah Akun</span>
       </button>
 
       <button 
-        id="btnLogout" 
+        id="btnOpenSysModal"
+        title="Status Server VPS"
+        class="h-8 px-2.5 rounded-lg bg-panelbg border border-bordercol hover:border-slate-500 text-slate-300 hover:text-white text-xs flex items-center gap-1.5 transition-colors"
+      >
+        <i data-lucide="server" class="w-3.5 h-3.5"></i>
+        <span class="hidden md:inline text-[11px]">VPS Info</span>
+      </button>
+
+      <button 
+        id="btnLogout"
         title="Logout"
-        class="p-1.5 rounded-lg bg-darkbg border border-bordercol hover:border-rose-500/50 text-slate-400 hover:text-rose-400 transition-colors"
+        class="h-8 px-2.5 rounded-lg bg-panelbg border border-bordercol hover:border-rose-500/40 text-slate-400 hover:text-rose-400 text-xs flex items-center transition-colors"
       >
         <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
       </button>
     </div>
   </header>
 
-  <main class="flex-1 relative bg-darkbg overflow-hidden p-1 sm:p-2 flex flex-col">
-    <div id="terminalContainer" class="flex-1 w-full h-full rounded-xl overflow-hidden border border-bordercol/80 bg-[#0d1117] shadow-inner relative">
-    </div>
+  <main class="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-8 py-6 space-y-6">
+
+    <section class="p-5 rounded-2xl bg-gradient-to-r from-blue-950/40 via-cardbg to-cardbg border border-blue-500/20 shadow-xl relative overflow-hidden">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div class="space-y-1.5">
+          <div class="flex items-center gap-2">
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              Akun Aktif di VPS
+            </span>
+            <span id="activeAccountSyncTime" class="text-[11px] text-slate-400"></span>
+          </div>
+          <h2 id="activeAccountTitle" class="text-xl font-bold text-white tracking-tight">Memuat akun aktif...</h2>
+          <p id="activeAccountNote" class="text-xs text-slate-400">Akun ini yang saat ini otomatis digunakan oleh perintah CLI `agy` di VPS.</p>
+        </div>
+
+        <div class="flex items-center gap-2 shrink-0">
+          <button 
+            id="btnTestCli"
+            class="h-8 px-3 rounded-lg bg-panelbg border border-bordercol hover:border-slate-500 text-slate-200 text-xs font-medium flex items-center gap-1.5 transition-colors active:scale-95"
+          >
+            <i data-lucide="activity" class="w-3.5 h-3.5 text-blue-400"></i>
+            <span>Uji Token CLI</span>
+          </button>
+        </div>
+      </div>
+      <div id="cliTestResult" class="mt-3 p-3 rounded-xl bg-darkbg/80 border border-bordercol text-xs font-mono hidden"></div>
+    </section>
+
+    <section class="space-y-3">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="text-sm font-bold text-white tracking-tight">Daftar Akun Antigravity Tersimpan</h3>
+          <p class="text-xs text-slate-400">Pilih akun dan klik "Gunakan Akun Ini" untuk berganti akun seketika tanpa login ulang.</p>
+        </div>
+        <span id="totalAccountsBadge" class="text-xs font-semibold px-2 py-0.5 rounded bg-panelbg border border-bordercol text-slate-300">0 Akun</span>
+      </div>
+
+      <div id="accountsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      </div>
+    </section>
+
   </main>
 
-  <footer class="bg-panelbg/95 border-t border-bordercol px-3 py-1.5 shrink-0 z-20 flex items-center justify-between gap-2 overflow-x-auto">
-    <div class="flex items-center gap-1 text-xs">
-      <button class="key-btn px-2 py-1 bg-darkbg border border-bordercol rounded-md text-slate-300 hover:bg-slate-800 active:scale-95 text-xs font-mono" data-key="ctrl-c">Ctrl+C</button>
-      <button class="key-btn px-2 py-1 bg-darkbg border border-bordercol rounded-md text-slate-300 hover:bg-slate-800 active:scale-95 text-xs font-mono" data-key="tab">TAB</button>
-      <button class="key-btn px-2 py-1 bg-darkbg border border-bordercol rounded-md text-slate-300 hover:bg-slate-800 active:scale-95 text-xs font-mono" data-key="esc">ESC</button>
-      <button class="key-btn px-2 py-1 bg-darkbg border border-bordercol rounded-md text-slate-300 hover:bg-slate-800 active:scale-95 text-xs font-mono" data-key="up">↑</button>
-      <button class="key-btn px-2 py-1 bg-darkbg border border-bordercol rounded-md text-slate-300 hover:bg-slate-800 active:scale-95 text-xs font-mono" data-key="down">↓</button>
-      <button class="key-btn px-2.5 py-1 bg-brand-600/30 border border-brand-500/40 rounded-md text-brand-300 hover:bg-brand-600/50 active:scale-95 text-xs font-mono" data-key="enter">Enter ↵</button>
-    </div>
-
-    <div class="flex items-center gap-1.5 shrink-0">
-      <span class="text-[11px] text-slate-400 hidden sm:inline">Commands:</span>
-      <button class="cmd-chip text-[11px] font-mono px-2 py-0.5 rounded bg-darkbg border border-bordercol text-slate-300 hover:border-slate-500" data-cmd="/plan">/plan</button>
-      <button class="cmd-chip text-[11px] font-mono px-2 py-0.5 rounded bg-darkbg border border-bordercol text-slate-300 hover:border-slate-500" data-cmd="/goal">/goal</button>
-      <button class="cmd-chip text-[11px] font-mono px-2 py-0.5 rounded bg-darkbg border border-bordercol text-slate-300 hover:border-slate-500" data-cmd="/help">/help</button>
-      <button class="cmd-chip text-[11px] font-mono px-2 py-0.5 rounded bg-darkbg border border-bordercol text-slate-300 hover:border-slate-500" data-cmd="/clear">/clear</button>
-    </div>
+  <footer class="border-t border-bordercol/60 px-4 py-4 text-center text-xs text-slate-400 shrink-0">
+    <span>Antigravity Remote Account Hub &bull; VPS Ubuntu Eka Syarif Maulana</span>
   </footer>
 
-  <div id="newProfileModal" class="fixed inset-0 z-40 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 hidden">
-    <div class="bg-panelbg border border-bordercol rounded-2xl p-6 max-w-sm w-full shadow-2xl">
-      <div class="flex items-center justify-between mb-4">
+  <div id="newAccountModal" class="fixed inset-0 z-40 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 hidden">
+    <div class="bg-cardbg border border-bordercol rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-bordercol">
         <h3 class="text-base font-bold text-white flex items-center gap-2">
           <i data-lucide="user-plus" class="w-4 h-4 text-brand-500"></i>
-          <span>Tambah Akun Baru</span>
+          <span>Hubungkan Akun Google Baru</span>
         </h3>
-        <button id="btnCloseNewProfileModal" class="text-slate-400 hover:text-white">
+        <button id="btnCloseNewAccountModal" class="text-slate-400 hover:text-white">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
 
-      <form id="newProfileForm" class="space-y-4">
+      <div id="wizardStep1" class="space-y-4">
         <div>
-          <label class="block text-xs text-slate-300 font-medium mb-1">Nama Akun / Profil</label>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Nama / Label Akun</label>
           <input 
             type="text" 
-            id="profileNameInput" 
+            id="newAccName" 
             placeholder="misal: Akun Cadangan 2" 
-            class="w-full bg-darkbg border border-bordercol rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500 transition-colors"
+            class="w-full bg-darkbg border border-bordercol rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500 transition-colors"
             required
           >
         </div>
         <div>
-          <label class="block text-xs text-slate-300 font-medium mb-1">Catatan / Email (Opsional)</label>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Catatan / Email (Opsional)</label>
           <input 
             type="text" 
-            id="profileNoteInput" 
+            id="newAccNote" 
             placeholder="misal: eka.cadangan@gmail.com" 
-            class="w-full bg-darkbg border border-bordercol rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500 transition-colors"
+            class="w-full bg-darkbg border border-bordercol rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500 transition-colors"
           >
         </div>
 
-        <div class="p-3 rounded-lg bg-darkbg/70 border border-bordercol/60 text-[11px] text-slate-400 space-y-1">
-          <div class="font-semibold text-slate-200 flex items-center gap-1.5">
-            <i data-lucide="info" class="w-3.5 h-3.5 text-blue-400"></i>
-            <span>Cara Login Akun Baru:</span>
+        <div class="p-3 rounded-xl bg-blue-950/20 border border-blue-500/20 text-xs text-slate-300 space-y-1">
+          <div class="font-semibold text-blue-400 flex items-center gap-1.5">
+            <i data-lucide="info" class="w-3.5 h-3.5"></i>
+            <span>Alur Login Mandiri (Tanpa Terminal)</span>
           </div>
-          <p>Setelah akun dibuat, sesi terminal akun tersebut akan terbuka. Klik link Google Sign-In yang muncul di terminal untuk autentikasi pertama kali.</p>
+          <p class="text-[11px] text-slate-400">Sistem akan meminta URL resmi Google OAuth. Anda cukup klik link untuk login akun Google dan menempelkan kode konfirmasi di sini.</p>
         </div>
 
         <div class="flex justify-end gap-2 pt-2">
           <button 
             type="button" 
-            id="btnCancelNewProfile"
-            class="px-4 py-2 rounded-lg bg-darkbg border border-bordercol hover:bg-slate-800 text-xs text-slate-300 font-medium transition-colors"
+            id="btnCancelStep1"
+            class="h-8 px-3 rounded-lg bg-panelbg border border-bordercol hover:bg-slate-800 text-xs text-slate-300 font-medium"
           >
             Batal
           </button>
           <button 
-            type="submit" 
-            class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-xs text-white font-medium transition-colors shadow-md shadow-brand-500/20"
+            type="button" 
+            id="btnStartLoginFlow"
+            class="h-8 px-4 rounded-lg bg-brand-600 hover:bg-brand-500 text-xs text-white font-medium flex items-center gap-1.5 shadow-md shadow-brand-500/20"
           >
-            Simpan Akun
+            <span>Dapatkan Link Login</span>
+            <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
           </button>
         </div>
-      </form>
+      </div>
+
+      <div id="wizardStep2" class="space-y-4 hidden">
+        <div class="text-center py-4 space-y-2">
+          <div class="inline-flex p-3 rounded-full bg-blue-500/10 text-blue-400 animate-spin">
+            <i data-lucide="loader-2" class="w-6 h-6"></i>
+          </div>
+          <p class="text-xs text-slate-300 font-medium">Sedang menyiapkan sesi login Google dari CLI...</p>
+        </div>
+      </div>
+
+      <div id="wizardStep3" class="space-y-4 hidden">
+        <div class="p-3.5 rounded-xl bg-panelbg border border-bordercol space-y-2">
+          <span class="text-[11px] font-semibold uppercase text-slate-400 block tracking-wider">Langkah 1: Otorisasi Google</span>
+          <a 
+            id="googleOAuthLink" 
+            href="#" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            class="w-full py-2.5 px-3 rounded-lg bg-white hover:bg-slate-100 text-slate-900 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md active:scale-[0.99]"
+          >
+            <svg class="w-4 h-4" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+            </svg>
+            <span>Buka Halaman Login Google (Klik Di Sini)</span>
+            <i data-lucide="external-link" class="w-3.5 h-3.5 text-slate-500"></i>
+          </a>
+          <p class="text-[11px] text-slate-400">Pilih akun Google Anda, klik Izinkan, lalu salin kode otorisasi yang diberikan Google.</p>
+        </div>
+
+        <div class="space-y-2">
+          <span class="text-[11px] font-semibold uppercase text-slate-400 block tracking-wider">Langkah 2: Tempel Kode Otorisasi</span>
+          <input 
+            type="text" 
+            id="authCodeInput" 
+            placeholder="Tempel kode 4/0A... di sini" 
+            class="w-full bg-darkbg border border-bordercol rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-brand-500 transition-colors"
+          >
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button 
+            type="button" 
+            id="btnCancelStep3"
+            class="h-8 px-3 rounded-lg bg-panelbg border border-bordercol hover:bg-slate-800 text-xs text-slate-300 font-medium"
+          >
+            Batal
+          </button>
+          <button 
+            type="button" 
+            id="btnSubmitAuthCode"
+            class="h-8 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs text-white font-medium flex items-center gap-1.5 shadow-md shadow-emerald-500/20"
+          >
+            <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
+            <span>Verifikasi & Simpan Akun</span>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
-  <div id="manageProfilesModal" class="fixed inset-0 z-40 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 hidden">
-    <div class="bg-panelbg border border-bordercol rounded-2xl p-6 max-w-md w-full shadow-2xl">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-base font-bold text-white flex items-center gap-2">
-          <i data-lucide="users" class="w-4 h-4 text-brand-500"></i>
-          <span>Kelola Akun Tersimpan</span>
+  <div id="sysModal" class="fixed inset-0 z-40 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 hidden">
+    <div class="bg-cardbg border border-bordercol rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4">
+      <div class="flex items-center justify-between pb-2 border-b border-bordercol">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <i data-lucide="server" class="w-4 h-4 text-blue-400"></i>
+          <span>Status VPS & Antigravity CLI</span>
         </h3>
-        <button id="btnCloseManageProfilesModal" class="text-slate-400 hover:text-white">
+        <button id="btnCloseSysModal" class="text-slate-400 hover:text-white">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
 
-      <div id="profilesListContainer" class="space-y-2 max-h-72 overflow-y-auto pr-1">
+      <div class="space-y-2 text-xs">
+        <div class="flex justify-between py-1 border-b border-bordercol/60">
+          <span class="text-slate-400">Host VPS:</span>
+          <span id="sysHost" class="font-mono text-slate-200">-</span>
+        </div>
+        <div class="flex justify-between py-1 border-b border-bordercol/60">
+          <span class="text-slate-400">RAM Digunakan:</span>
+          <span id="sysRam" class="font-mono text-slate-200">-</span>
+        </div>
+        <div class="flex justify-between py-1 border-b border-bordercol/60">
+          <span class="text-slate-400">Path Binary CLI:</span>
+          <span id="sysAgyPath" class="font-mono text-slate-200 text-[11px]">-</span>
+        </div>
+        <div class="flex justify-between py-1">
+          <span class="text-slate-400">Akun Terpasang:</span>
+          <span id="sysActiveAcc" class="font-semibold text-emerald-400">-</span>
+        </div>
       </div>
 
-      <div class="flex justify-end pt-4 mt-2 border-t border-bordercol">
+      <div class="flex justify-end pt-2">
         <button 
-          id="btnCloseManageProfilesDone"
-          class="px-4 py-2 rounded-lg bg-darkbg border border-bordercol hover:bg-slate-800 text-xs text-slate-300 font-medium transition-colors"
+          id="btnCloseSysModalDone"
+          class="h-8 px-4 rounded-lg bg-panelbg border border-bordercol hover:bg-slate-800 text-xs text-slate-300 font-medium"
         >
           Tutup
         </button>
       </div>
     </div>
+  </div>
+
+  <div id="toast" class="fixed bottom-5 right-5 z-50 px-4 py-2.5 rounded-xl bg-cardbg border border-bordercol shadow-2xl text-xs font-medium text-white flex items-center gap-2 transform translate-y-20 opacity-0 transition-all duration-200 pointer-events-none">
+    <i id="toastIcon" data-lucide="check" class="w-4 h-4 text-emerald-400"></i>
+    <span id="toastMsg">Pesan</span>
   </div>
 
   <script src="/app.js"></script>

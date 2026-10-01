@@ -4,38 +4,18 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #0d1117;
+  background: #0a0d14;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #30363d;
+  background: #242f44;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #484f58;
+  background: #313e59;
 }
 
-.xterm {
-  height: 100%;
-  padding: 8px;
-}
-
-.xterm-viewport {
-  overflow-y: auto !important;
-}
-
-.key-btn {
-  user-select: none;
-  touch-action: manipulation;
-}
-
-.cmd-chip {
-  user-select: none;
-  touch-action: manipulation;
-  transition: all 0.15s ease-in-out;
-}
-
-.cmd-chip:hover {
-  background-color: #21262d;
+input:focus, button:focus {
+  outline: none;
 }
