@@ -20,11 +20,19 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const PROFILES_DIR = process.env.PROFILES_DIR || path.join(__dirname, 'profiles');
 const IDENTITY_FILE = path.join(DATA_DIR, 'identity.json');
 
+// ── VPS-local adaptation ──
+// LOCAL_MODE=true  : kelola langsung ~/.gemini asli milik user di VPS ini
+//                    (tanpa symlink, tanpa hapus folder global) — aman.
+// LOCAL_MODE=false : mode profil lama (isolated profile dir + symlink).
+const LOCAL_MODE = process.env.LOCAL_MODE !== 'false';
+const LOCAL_HOME = process.env.LOCAL_HOME || os.homedir();
+const AGY_BIN = process.env.AGY_BIN || path.join(LOCAL_HOME, '.local', 'bin', 'agy');
+
 fs.mkdirSync(DATA_DIR, { recursive: true });
-fs.mkdirSync(PROFILES_DIR, { recursive: true });
+if (!LOCAL_MODE) fs.mkdirSync(PROFILES_DIR, { recursive: true });
 
 const PRIMARY_PROFILE_ID = 'primary';
-const PRIMARY_PROFILE_DIR = path.join(PROFILES_DIR, PRIMARY_PROFILE_ID);
+const PRIMARY_PROFILE_DIR = LOCAL_MODE ? LOCAL_HOME : path.join(PROFILES_DIR, PRIMARY_PROFILE_ID);
 const PRIMARY_GEMINI_DIR = path.join(PRIMARY_PROFILE_DIR, '.gemini');
 
 fs.mkdirSync(path.join(PRIMARY_GEMINI_DIR, 'antigravity-cli'), { recursive: true });
@@ -74,6 +82,12 @@ function isPrimaryAuthenticated() {
   }
 
   try {
+    if (LOCAL_MODE) {
+      // Deteksi langsung & ketat: token OAuth file-based yang dipakai agy di VPS ini.
+      // Jangan pakai heuristik jumlah file — itu false-positive setelah logout.
+      const tokenFile = path.join(cliDir, 'antigravity-oauth-token');
+      return fs.existsSync(tokenFile);
+    }
     const files = fs.readdirSync(cliDir);
     return files.includes('history.jsonl') || files.includes('jetski_state.pbtxt') || files.includes('conversation_summaries.db') || files.length >= 3;
   } catch {
@@ -82,6 +96,7 @@ function isPrimaryAuthenticated() {
 }
 
 function ensureGlobalSymlink() {
+  if (LOCAL_MODE) return; // kelola ~/.gemini asli — tidak perlu symlink
   if (os.platform() === 'linux') {
     const rootGemini = path.join(os.homedir(), '.gemini');
     try {
@@ -194,8 +209,8 @@ app.post('/api/auth/start-login', authenticateRequest, async (req, res) => {
   const isWindows = os.platform() === 'win32';
   const spawnCmd = isWindows ? 'cmd.exe' : 'bash';
   const spawnArgs = isWindows
-    ? ['/c', 'agy']
-    : ['-c', `export HOME='${PRIMARY_PROFILE_DIR}'; exec agy`];
+    ? ['/c', AGY_BIN]
+    : ['-c', `export HOME='${PRIMARY_PROFILE_DIR}'; exec ${AGY_BIN}`];
 
   let ptyProcess = null;
   try {
@@ -358,7 +373,11 @@ app.post('/api/auth/submit-code', authenticateRequest, async (req, res) => {
 
 app.post('/api/auth/disconnect', authenticateRequest, (req, res) => {
   try {
-    if (fs.existsSync(PRIMARY_GEMINI_DIR)) {
+    if (LOCAL_MODE) {
+      // VPS-local mode: hanya cabut token OAuth, JANGAN hapus seluruh ~/.gemini
+      const tokenFile = path.join(PRIMARY_GEMINI_DIR, 'antigravity-cli', 'antigravity-oauth-token');
+      if (fs.existsSync(tokenFile)) fs.rmSync(tokenFile, { force: true });
+    } else if (fs.existsSync(PRIMARY_GEMINI_DIR)) {
       fs.rmSync(PRIMARY_GEMINI_DIR, { recursive: true, force: true });
       fs.mkdirSync(path.join(PRIMARY_GEMINI_DIR, 'antigravity-cli'), { recursive: true });
     }
@@ -372,8 +391,8 @@ app.post('/api/auth/disconnect', authenticateRequest, (req, res) => {
       success: true,
       message: 'Akun berhasil diputuskan dari Antigravity CLI'
     });
-  } catch {
-    return res.status(500).json({ error: 'Gagal memutuskan akun' });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || 'Gagal memutuskan akun' });
   }
 });
 
@@ -381,7 +400,7 @@ app.post('/api/system/test-cli', authenticateRequest, (req, res) => {
   ensureGlobalSymlink();
 
   const isWindows = os.platform() === 'win32';
-  const testCmd = isWindows ? 'agy models' : `HOME='${PRIMARY_PROFILE_DIR}' agy models`;
+  const testCmd = isWindows ? AGY_BIN + ' models' : `HOME='${PRIMARY_PROFILE_DIR}' ${AGY_BIN} models`;
 
   exec(testCmd, { timeout: 8000 }, (error, stdout, stderr) => {
     const output = (stdout || stderr || '').trim();
