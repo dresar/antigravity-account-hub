@@ -262,8 +262,8 @@ app.post('/api/profiles/start-login', authenticateRequest, async (req, res) => {
   try {
     ptyProcess = pty.spawn(spawnCmd, spawnArgs, {
       name: 'xterm-color',
-      cols: 100,
-      rows: 30,
+      cols: 1000,
+      rows: 40,
       cwd: profileDir,
       env: {
         ...process.env,
@@ -297,13 +297,25 @@ app.post('/api/profiles/start-login', authenticateRequest, async (req, res) => {
 
       if (!sentEnter && (buffer.includes('Google OAuth') || buffer.includes('Select login method'))) {
         sentEnter = true;
-        ptyProcess.write('\r');
+        setTimeout(() => {
+          ptyProcess.write('\r');
+        }, 400);
       }
 
-      const match = buffer.match(/(https:\/\/accounts\.google\.com\/o\/oauth2\/auth\S+)/);
+      const cleanText = buffer
+        .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+        .replace(/\x1b\]8;;[^\x1b]*\x1b\\/g, '')
+        .replace(/[\r\n\x07]/g, ' ');
+
+      const match = cleanText.match(/(https:\/\/accounts\.google\.com\/o\/oauth2\/auth\?[^'"><\s]+?state=[A-Za-z0-9_-]+)/);
       if (match) {
-        capturedAuthUrl = match[1].replace(/[\r\n\x1b].*$/, '');
-        resolve(capturedAuthUrl);
+        try {
+          const parsed = new URL(match[1]);
+          if (parsed.searchParams.get('client_id') && parsed.searchParams.get('state')) {
+            capturedAuthUrl = parsed.href;
+            resolve(capturedAuthUrl);
+          }
+        } catch {}
       }
     };
 
@@ -311,13 +323,15 @@ app.post('/api/profiles/start-login', authenticateRequest, async (req, res) => {
 
     setTimeout(() => {
       resolve(capturedAuthUrl);
-    }, 8000);
+    }, 12000);
   });
 
   const authUrl = await urlPromise;
 
   if (!authUrl) {
-    ptyProcess.kill();
+    try {
+      ptyProcess.kill();
+    } catch {}
     pendingLoginSessions.delete(sessionId);
     return res.status(500).json({
       error: 'Gagal mendapatkan link login dari Antigravity CLI. Coba beberapa saat lagi.'
@@ -344,28 +358,37 @@ app.post('/api/profiles/submit-code', authenticateRequest, async (req, res) => {
   }
 
   const cleanCode = code.trim();
-  session.ptyProcess.write(`${cleanCode}\r`);
+  session.ptyProcess.write(`${cleanCode}\r\n`);
 
   const verificationPromise = new Promise((resolve) => {
     let checkCount = 0;
     const interval = setInterval(() => {
       checkCount++;
-      const authenticated = isProfileAuthenticated(session.profileId);
-      if (authenticated || checkCount >= 10) {
+      const hasToken = isProfileAuthenticated(session.profileId);
+      const isBufferSuccess = session.buffer.includes('Signed in') || session.buffer.includes('Welcome') || session.buffer.includes('signed in');
+      const isBufferError = session.buffer.includes('invalid') || session.buffer.includes('Invalid') || session.buffer.includes('failed to authenticate');
+
+      if (hasToken || isBufferSuccess) {
         clearInterval(interval);
-        resolve(authenticated);
+        resolve({ success: true });
+      } else if (isBufferError && checkCount >= 4) {
+        clearInterval(interval);
+        resolve({ success: false, error: 'Kode otorisasi tidak valid atau telah kedaluwarsa' });
+      } else if (checkCount >= 12) {
+        clearInterval(interval);
+        resolve({ success: hasToken, error: 'Waktu verifikasi habis' });
       }
     }, 1000);
   });
 
-  const isSuccess = await verificationPromise;
+  const verificationResult = await verificationPromise;
 
   try {
     session.ptyProcess.kill();
   } catch {}
   pendingLoginSessions.delete(sessionId);
 
-  if (isSuccess) {
+  if (verificationResult.success) {
     setActiveProfileGlobal(session.profileId);
     return res.json({
       success: true,
@@ -373,9 +396,8 @@ app.post('/api/profiles/submit-code', authenticateRequest, async (req, res) => {
     });
   }
 
-  return res.json({
-    success: true,
-    message: 'Kode telah dikirimkan ke CLI'
+  return res.status(400).json({
+    error: verificationResult.error || 'Gagal memverifikasi kode otorisasi'
   });
 });
 

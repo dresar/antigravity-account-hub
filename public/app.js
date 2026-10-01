@@ -385,6 +385,16 @@ btnCancelStep3.addEventListener('click', () => {
   newAccountModal.classList.add('hidden');
 });
 
+const btnCopyOAuthUrl = document.getElementById('btnCopyOAuthUrl');
+if (btnCopyOAuthUrl) {
+  btnCopyOAuthUrl.addEventListener('click', () => {
+    if (googleOAuthLink.href && googleOAuthLink.href !== '#') {
+      navigator.clipboard.writeText(googleOAuthLink.href);
+      showToast('Tautan login Google berhasil disalin!');
+    }
+  });
+}
+
 btnStartLoginFlow.addEventListener('click', async () => {
   const name = newAccName.value.trim();
   const note = newAccNote.value.trim();
