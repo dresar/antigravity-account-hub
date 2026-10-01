@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Antigravity Remote Hub</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
+  <link rel="stylesheet" href="/style.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eff6ff',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+              900: '#1e3a8a'
+            },
+            darkbg: '#0d1117',
+            panelbg: '#161b22',
+            bordercol: '#30363d'
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-[#090d16] text-slate-100 flex flex-col h-screen overflow-hidden font-sans select-none antialiased">
+
+  <div id="authOverlay" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+    <div class="bg-panelbg border border-bordercol rounded-2xl p-6 md:p-8 max-w-sm w-full shadow-2xl text-center">
+      <div class="inline-flex p-3 rounded-2xl bg-brand-500/10 text-brand-500 mb-4">
+        <i data-lucide="shield-check" class="w-8 h-8"></i>
+      </div>
+      <h2 class="text-xl font-bold tracking-tight text-white mb-1">Antigravity Remote</h2>
+      <p class="text-xs text-slate-400 mb-6">Masukkan Master PIN untuk mengakses VPS</p>
+      <form id="authForm" class="space-y-4">
+        <input 
+          type="password" 
+          id="pinInput" 
+          inputmode="numeric" 
+          placeholder="••••••" 
+          class="w-full text-center tracking-[0.5em] text-2xl font-bold bg-darkbg border border-bordercol rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand-500 transition-colors"
+          required
+          autofocus
+        >
+        <button 
+          type="submit" 
+          id="btnAuthSubmit"
+          class="w-full py-3 px-4 bg-brand-600 hover:bg-brand-500 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2 text-sm shadow-lg shadow-brand-500/20 active:scale-[0.98]"
+        >
+          <span>Masuk Dashboard</span>
+          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </button>
+      </form>
+      <p id="authError" class="text-xs text-rose-500 mt-3 hidden font-medium"></p>
+    </div>
+  </div>
+
+  <header class="bg-panelbg/90 backdrop-blur border-b border-bordercol px-4 py-2.5 flex items-center justify-between shrink-0 z-20">
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-black text-xs text-white shadow-md shadow-blue-500/30">
+          AG
+        </div>
+        <span class="font-bold text-sm tracking-tight text-slate-200 hidden sm:inline">Antigravity Remote</span>
+      </div>
+
+      <div class="h-4 w-px bg-bordercol hidden sm:block"></div>
+
+      <div class="flex items-center gap-1.5">
+        <label for="profileSelect" class="text-xs text-slate-400 hidden md:inline">Akun:</label>
+        <div class="relative">
+          <select 
+            id="profileSelect" 
+            class="bg-darkbg text-xs font-medium text-slate-200 border border-bordercol rounded-lg pl-2.5 pr-8 py-1.5 appearance-none focus:outline-none focus:border-brand-500 transition-colors cursor-pointer hover:border-slate-500"
+          >
+          </select>
+          <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+        </div>
+
+        <button 
+          id="btnOpenNewProfileModal"
+          title="Tambah Akun Baru"
+          class="p-1.5 rounded-lg bg-darkbg border border-bordercol hover:border-slate-500 text-slate-300 hover:text-white transition-colors text-xs flex items-center gap-1 px-2 font-medium"
+        >
+          <i data-lucide="user-plus" class="w-3.5 h-3.5 text-brand-500"></i>
+          <span class="hidden lg:inline text-[11px]">+ Akun</span>
+        </button>
+
+        <button 
+          id="btnOpenManageProfilesModal"
+          title="Kelola Profil Akun"
+          class="p-1.5 rounded-lg bg-darkbg border border-bordercol hover:border-slate-500 text-slate-300 hover:text-white transition-colors"
+        >
+          <i data-lucide="users" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <div id="connStatusBadge" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+        <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+        <span id="connStatusText">Connecting</span>
+      </div>
+
+      <button 
+        id="btnRestartSession" 
+        title="Reset & Restart Sesi Terminal"
+        class="p-1.5 rounded-lg bg-darkbg border border-bordercol hover:border-amber-500/50 text-slate-300 hover:text-amber-400 transition-colors flex items-center gap-1 px-2 text-xs"
+      >
+        <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+        <span class="hidden md:inline text-[11px]">Restart Sesi</span>
+      </button>
+
+      <button 
+        id="btnLogout" 
+        title="Logout"
+        class="p-1.5 rounded-lg bg-darkbg border border-bordercol hover:border-rose-500/50 text-slate-400 hover:text-rose-400 transition-colors"
+      >
+        <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+      </button>
+    </div>
+  </header>
+
+  <main class="flex-1 relative bg-darkbg overflow-hidden p-1 sm:p-2 flex flex-col">
+    <div id="terminalContainer" class="flex-1 w-full h-full rounded-xl overflow-hidden border border-bordercol/80 bg-[#0d1117] shadow-inner relative">
+    </div>
+  </main>
+
+  <footer class="bg-panelbg/95 border-t border-bordercol px-3 py-1.5 shrink-0 z-20 flex items-center justify-between gap-2 overflow-x-auto">
+    <div class="flex items-center gap-1 text-xs">
+      <button class="key-btn px-2 py-1 bg-darkbg border border-bordercol rounded-md text-slate-300 hover:bg-slate-800 active:scale-95 text-xs font-mono" data-key="ctrl-c">Ctrl+C</button>
+      <button class="key-btn px-2 py-1 bg-darkbg border border-bordercol rounded-md text-slate-300 hover:bg-slate-800 active:scale-95 text-xs font-mono" data-key="tab">TAB</button>
+      <button class="key-btn px-2 py-1 bg-darkbg border border-bordercol rounded-md text-slate-300 hover:bg-slate-800 active:scale-95 text-xs font-mono" data-key="esc">ESC</button>
+      <button class="key-btn px-2 py-1 bg-darkbg border border-bordercol rounded-md text-slate-300 hover:bg-slate-800 active:scale-95 text-xs font-mono" data-key="up">↑</button>
+      <button class="key-btn px-2 py-1 bg-darkbg border border-bordercol rounded-md text-slate-300 hover:bg-slate-800 active:scale-95 text-xs font-mono" data-key="down">↓</button>
+      <button class="key-btn px-2.5 py-1 bg-brand-600/30 border border-brand-500/40 rounded-md text-brand-300 hover:bg-brand-600/50 active:scale-95 text-xs font-mono" data-key="enter">Enter ↵</button>
+    </div>
+
+    <div class="flex items-center gap-1.5 shrink-0">
+      <span class="text-[11px] text-slate-400 hidden sm:inline">Commands:</span>
+      <button class="cmd-chip text-[11px] font-mono px-2 py-0.5 rounded bg-darkbg border border-bordercol text-slate-300 hover:border-slate-500" data-cmd="/plan">/plan</button>
+      <button class="cmd-chip text-[11px] font-mono px-2 py-0.5 rounded bg-darkbg border border-bordercol text-slate-300 hover:border-slate-500" data-cmd="/goal">/goal</button>
+      <button class="cmd-chip text-[11px] font-mono px-2 py-0.5 rounded bg-darkbg border border-bordercol text-slate-300 hover:border-slate-500" data-cmd="/help">/help</button>
+      <button class="cmd-chip text-[11px] font-mono px-2 py-0.5 rounded bg-darkbg border border-bordercol text-slate-300 hover:border-slate-500" data-cmd="/clear">/clear</button>
+    </div>
+  </footer>
+
+  <div id="newProfileModal" class="fixed inset-0 z-40 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 hidden">
+    <div class="bg-panelbg border border-bordercol rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <i data-lucide="user-plus" class="w-4 h-4 text-brand-500"></i>
+          <span>Tambah Akun Baru</span>
+        </h3>
+        <button id="btnCloseNewProfileModal" class="text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <form id="newProfileForm" class="space-y-4">
+        <div>
+          <label class="block text-xs text-slate-300 font-medium mb-1">Nama Akun / Profil</label>
+          <input 
+            type="text" 
+            id="profileNameInput" 
+            placeholder="misal: Akun Cadangan 2" 
+            class="w-full bg-darkbg border border-bordercol rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500 transition-colors"
+            required
+          >
+        </div>
+        <div>
+          <label class="block text-xs text-slate-300 font-medium mb-1">Catatan / Email (Opsional)</label>
+          <input 
+            type="text" 
+            id="profileNoteInput" 
+            placeholder="misal: eka.cadangan@gmail.com" 
+            class="w-full bg-darkbg border border-bordercol rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500 transition-colors"
+          >
+        </div>
+
+        <div class="p-3 rounded-lg bg-darkbg/70 border border-bordercol/60 text-[11px] text-slate-400 space-y-1">
+          <div class="font-semibold text-slate-200 flex items-center gap-1.5">
+            <i data-lucide="info" class="w-3.5 h-3.5 text-blue-400"></i>
+            <span>Cara Login Akun Baru:</span>
+          </div>
+          <p>Setelah akun dibuat, sesi terminal akun tersebut akan terbuka. Klik link Google Sign-In yang muncul di terminal untuk autentikasi pertama kali.</p>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button 
+            type="button" 
+            id="btnCancelNewProfile"
+            class="px-4 py-2 rounded-lg bg-darkbg border border-bordercol hover:bg-slate-800 text-xs text-slate-300 font-medium transition-colors"
+          >
+            Batal
+          </button>
+          <button 
+            type="submit" 
+            class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-xs text-white font-medium transition-colors shadow-md shadow-brand-500/20"
+          >
+            Simpan Akun
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="manageProfilesModal" class="fixed inset-0 z-40 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 hidden">
+    <div class="bg-panelbg border border-bordercol rounded-2xl p-6 max-w-md w-full shadow-2xl">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <i data-lucide="users" class="w-4 h-4 text-brand-500"></i>
+          <span>Kelola Akun Tersimpan</span>
+        </h3>
+        <button id="btnCloseManageProfilesModal" class="text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div id="profilesListContainer" class="space-y-2 max-h-72 overflow-y-auto pr-1">
+      </div>
+
+      <div class="flex justify-end pt-4 mt-2 border-t border-bordercol">
+        <button 
+          id="btnCloseManageProfilesDone"
+          class="px-4 py-2 rounded-lg bg-darkbg border border-bordercol hover:bg-slate-800 text-xs text-slate-300 font-medium transition-colors"
+        >
+          Tutup
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

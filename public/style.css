@@ -1,0 +1,41 @@
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0d1117;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #484f58;
+}
+
+.xterm {
+  height: 100%;
+  padding: 8px;
+}
+
+.xterm-viewport {
+  overflow-y: auto !important;
+}
+
+.key-btn {
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.cmd-chip {
+  user-select: none;
+  touch-action: manipulation;
+  transition: all 0.15s ease-in-out;
+}
+
+.cmd-chip:hover {
+  background-color: #21262d;
+}
