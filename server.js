@@ -16,126 +16,96 @@ const __dirname = path.dirname(__filename);
 
 const PORT = parseInt(process.env.PORT || '3838', 10);
 const AUTH_PIN = process.env.AUTH_PIN || '16799';
-const PROFILES_DIR = process.env.PROFILES_DIR || path.join(__dirname, 'profiles');
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
-const PROFILES_FILE = path.join(DATA_DIR, 'profiles.json');
-const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
+const PROFILES_DIR = process.env.PROFILES_DIR || path.join(__dirname, 'profiles');
+const IDENTITY_FILE = path.join(DATA_DIR, 'identity.json');
 
-fs.mkdirSync(PROFILES_DIR, { recursive: true });
 fs.mkdirSync(DATA_DIR, { recursive: true });
+fs.mkdirSync(PROFILES_DIR, { recursive: true });
 
-function initializeDatabase() {
-  if (!fs.existsSync(PROFILES_FILE)) {
-    const initialProfiles = [
-      {
-        id: 'default',
-        name: 'Akun Utama',
-        note: 'Akun default Antigravity di VPS',
-        createdAt: new Date().toISOString(),
-        lastUsed: new Date().toISOString()
-      }
-    ];
-    fs.writeFileSync(PROFILES_FILE, JSON.stringify(initialProfiles, null, 2), 'utf-8');
-  }
+const PRIMARY_PROFILE_ID = 'primary';
+const PRIMARY_PROFILE_DIR = path.join(PROFILES_DIR, PRIMARY_PROFILE_ID);
+const PRIMARY_GEMINI_DIR = path.join(PRIMARY_PROFILE_DIR, '.gemini');
 
-  if (!fs.existsSync(CONFIG_FILE)) {
-    const initialConfig = {
-      activeProfileId: 'default'
+fs.mkdirSync(path.join(PRIMARY_GEMINI_DIR, 'antigravity-cli'), { recursive: true });
+
+function initializeIdentityDatabase() {
+  if (!fs.existsSync(IDENTITY_FILE)) {
+    const initialIdentity = {
+      email: '',
+      name: 'Eka Syarif Maulana',
+      provider: 'Google OAuth',
+      status: 'disconnected',
+      createdAt: null,
+      lastVerifiedAt: null,
+      notes: 'Akun Antigravity CLI VPS'
     };
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify(initialConfig, null, 2), 'utf-8');
+    fs.writeFileSync(IDENTITY_FILE, JSON.stringify(initialIdentity, null, 2), 'utf-8');
   }
 }
 
-initializeDatabase();
+initializeIdentityDatabase();
 
-function readProfiles() {
+function readIdentity() {
   try {
-    const raw = fs.readFileSync(PROFILES_FILE, 'utf-8');
+    const raw = fs.readFileSync(IDENTITY_FILE, 'utf-8');
     return JSON.parse(raw);
   } catch {
-    return [];
+    return {
+      email: '',
+      name: 'Eka Syarif Maulana',
+      provider: 'Google OAuth',
+      status: 'disconnected',
+      createdAt: null,
+      lastVerifiedAt: null,
+      notes: ''
+    };
   }
 }
 
-function writeProfiles(profiles) {
-  fs.writeFileSync(PROFILES_FILE, JSON.stringify(profiles, null, 2), 'utf-8');
+function writeIdentity(identity) {
+  fs.writeFileSync(IDENTITY_FILE, JSON.stringify(identity, null, 2), 'utf-8');
 }
 
-function readConfig() {
-  try {
-    const raw = fs.readFileSync(CONFIG_FILE, 'utf-8');
-    return JSON.parse(raw);
-  } catch {
-    return { activeProfileId: 'default' };
-  }
-}
-
-function writeConfig(config) {
-  fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf-8');
-}
-
-function ensureProfileFolder(profileId) {
-  const profilePath = path.join(PROFILES_DIR, profileId);
-  fs.mkdirSync(profilePath, { recursive: true });
-  fs.mkdirSync(path.join(profilePath, '.gemini', 'antigravity-cli'), { recursive: true });
-  return profilePath;
-}
-
-function isProfileAuthenticated(profileId) {
-  const profileDir = path.join(PROFILES_DIR, profileId);
-  const geminiDir = path.join(profileDir, '.gemini');
-  if (!fs.existsSync(geminiDir)) {
-    return false;
-  }
-
-  const cliDir = path.join(geminiDir, 'antigravity-cli');
+function isPrimaryAuthenticated() {
+  const cliDir = path.join(PRIMARY_GEMINI_DIR, 'antigravity-cli');
   if (!fs.existsSync(cliDir)) {
     return false;
   }
 
   try {
     const files = fs.readdirSync(cliDir);
-    const hasHistory = files.includes('history.jsonl') || files.includes('conversation_summaries.db') || files.includes('presence');
-    const hasAnyConfig = files.length > 2;
-    return hasHistory || hasAnyConfig;
+    return files.includes('history.jsonl') || files.includes('jetski_state.pbtxt') || files.includes('conversation_summaries.db') || files.length >= 3;
   } catch {
     return false;
   }
 }
 
-function setActiveProfileGlobal(profileId) {
-  const profileDir = ensureProfileFolder(profileId);
-  const profileGemini = path.join(profileDir, '.gemini');
-
+function ensureGlobalSymlink() {
   if (os.platform() === 'linux') {
     const rootGemini = path.join(os.homedir(), '.gemini');
     try {
       if (fs.existsSync(rootGemini) || fs.lstatSync(rootGemini).isSymbolicLink()) {
+        const stats = fs.lstatSync(rootGemini);
+        if (stats.isSymbolicLink()) {
+          const target = fs.readlinkSync(rootGemini);
+          if (target === PRIMARY_GEMINI_DIR) {
+            return;
+          }
+        }
         fs.rmSync(rootGemini, { recursive: true, force: true });
       }
     } catch {}
 
     try {
-      fs.symlinkSync(profileGemini, rootGemini, 'dir');
+      fs.symlinkSync(PRIMARY_GEMINI_DIR, rootGemini, 'dir');
     } catch (err) {
       console.error(err);
     }
   }
-
-  const config = readConfig();
-  config.activeProfileId = profileId;
-  writeConfig(config);
-
-  const profiles = readProfiles();
-  const target = profiles.find((p) => p.id === profileId);
-  if (target) {
-    target.lastUsed = new Date().toISOString();
-    writeProfiles(profiles);
-  }
 }
 
-const initialConfig = readConfig();
-setActiveProfileGlobal(initialConfig.activeProfileId || 'default');
+ensureGlobalSymlink();
 
 const pendingLoginSessions = new Map();
 
@@ -151,7 +121,7 @@ function authenticateRequest(req, res, next) {
   if (token === AUTH_PIN) {
     return next();
   }
-  return res.status(401).json({ error: 'Unauthorized' });
+  return res.status(401).json({ error: 'Sesi tidak valid' });
 }
 
 app.post('/api/auth/login', (req, res) => {
@@ -164,7 +134,7 @@ app.post('/api/auth/login', (req, res) => {
     });
     return res.json({ success: true });
   }
-  return res.status(401).json({ error: 'PIN salah' });
+  return res.status(401).json({ error: 'PIN yang dimasukkan salah' });
 });
 
 app.get('/api/auth/check', (req, res) => {
@@ -177,86 +147,55 @@ app.post('/api/auth/logout', (req, res) => {
   return res.json({ success: true });
 });
 
-app.get('/api/profiles', authenticateRequest, (req, res) => {
-  const profiles = readProfiles();
-  const config = readConfig();
+app.get('/api/identity', authenticateRequest, (req, res) => {
+  const identity = readIdentity();
+  const authenticated = isPrimaryAuthenticated();
 
-  const enrichedProfiles = profiles.map((p) => {
-    return {
-      ...p,
-      isActive: p.id === config.activeProfileId,
-      isAuthenticated: isProfileAuthenticated(p.id)
-    };
-  });
+  if (authenticated && identity.status === 'disconnected') {
+    identity.status = 'connected';
+    writeIdentity(identity);
+  } else if (!authenticated && identity.status === 'connected') {
+    identity.status = 'disconnected';
+    writeIdentity(identity);
+  }
 
   return res.json({
-    activeProfileId: config.activeProfileId,
-    profiles: enrichedProfiles
+    identity,
+    system: {
+      hostname: os.hostname(),
+      platform: os.platform(),
+      uptime: Math.round(os.uptime()),
+      memory: {
+        totalMb: Math.round(os.totalmem() / (1024 * 1024)),
+        usedMb: Math.round((os.totalmem() - os.freemem()) / (1024 * 1024))
+      }
+    }
   });
 });
 
-app.post('/api/profiles/active', authenticateRequest, (req, res) => {
-  const { profileId } = req.body;
-  if (!profileId) {
-    return res.status(400).json({ error: 'Profile ID harus diisi' });
-  }
+app.post('/api/identity/update', authenticateRequest, (req, res) => {
+  const { name, notes, email } = req.body;
+  const identity = readIdentity();
 
-  const profiles = readProfiles();
-  const exists = profiles.some((p) => p.id === profileId);
-  if (!exists) {
-    return res.status(404).json({ error: 'Profil tidak ditemukan' });
-  }
+  if (name !== undefined) identity.name = String(name).trim();
+  if (notes !== undefined) identity.notes = String(notes).trim();
+  if (email !== undefined) identity.email = String(email).trim();
 
-  setActiveProfileGlobal(profileId);
-  return res.json({ success: true, activeProfileId: profileId });
+  writeIdentity(identity);
+  return res.json({ success: true, identity });
 });
 
-app.post('/api/profiles/start-login', authenticateRequest, async (req, res) => {
-  const { profileName, note, existingProfileId } = req.body;
+app.post('/api/auth/start-login', authenticateRequest, async (req, res) => {
+  const { email, name } = req.body;
 
-  let targetId = existingProfileId;
-  const profiles = readProfiles();
+  ensureGlobalSymlink();
 
-  if (!targetId) {
-    if (!profileName || typeof profileName !== 'string') {
-      return res.status(400).json({ error: 'Nama akun harus diisi' });
-    }
-
-    const idSlug = profileName
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '') || `acc-${Date.now()}`;
-
-    targetId = idSlug;
-    let counter = 1;
-    while (profiles.some((p) => p.id === targetId)) {
-      targetId = `${idSlug}-${counter}`;
-      counter++;
-    }
-
-    ensureProfileFolder(targetId);
-
-    const newProfile = {
-      id: targetId,
-      name: profileName.trim(),
-      note: (note || '').trim(),
-      createdAt: new Date().toISOString(),
-      lastUsed: new Date().toISOString()
-    };
-
-    profiles.push(newProfile);
-    writeProfiles(profiles);
-  }
-
-  const profileDir = ensureProfileFolder(targetId);
-  const sessionId = `login_${targetId}_${Date.now()}`;
-
+  const sessionId = `login_${Date.now()}`;
   const isWindows = os.platform() === 'win32';
   const spawnCmd = isWindows ? 'cmd.exe' : 'bash';
   const spawnArgs = isWindows
     ? ['/c', 'agy']
-    : ['-c', `export HOME='${profileDir}'; exec agy`];
+    : ['-c', `export HOME='${PRIMARY_PROFILE_DIR}'; exec agy`];
 
   let ptyProcess = null;
   try {
@@ -264,16 +203,16 @@ app.post('/api/profiles/start-login', authenticateRequest, async (req, res) => {
       name: 'xterm-color',
       cols: 1000,
       rows: 40,
-      cwd: profileDir,
+      cwd: PRIMARY_PROFILE_DIR,
       env: {
         ...process.env,
-        HOME: profileDir,
-        USERPROFILE: profileDir,
+        HOME: PRIMARY_PROFILE_DIR,
+        USERPROFILE: PRIMARY_PROFILE_DIR,
         TERM: 'xterm-color'
       }
     });
   } catch (spawnError) {
-    return res.status(500).json({ error: 'Gagal menjalankan proses CLI' });
+    return res.status(500).json({ error: 'Gagal menjalankan Antigravity CLI' });
   }
 
   let capturedAuthUrl = null;
@@ -282,9 +221,10 @@ app.post('/api/profiles/start-login', authenticateRequest, async (req, res) => {
 
   const sessionData = {
     sessionId,
-    profileId: targetId,
     ptyProcess,
     buffer: '',
+    emailDraft: (email || '').trim(),
+    nameDraft: (name || '').trim(),
     createdAt: Date.now()
   };
 
@@ -334,27 +274,26 @@ app.post('/api/profiles/start-login', authenticateRequest, async (req, res) => {
     } catch {}
     pendingLoginSessions.delete(sessionId);
     return res.status(500).json({
-      error: 'Gagal mendapatkan link login dari Antigravity CLI. Coba beberapa saat lagi.'
+      error: 'Gagal mendapatkan tautan otentikasi Google dari CLI. Silakan coba kembali.'
     });
   }
 
   return res.json({
     success: true,
     sessionId,
-    profileId: targetId,
     authUrl
   });
 });
 
-app.post('/api/profiles/submit-code', authenticateRequest, async (req, res) => {
-  const { sessionId, code } = req.body;
+app.post('/api/auth/submit-code', authenticateRequest, async (req, res) => {
+  const { sessionId, code, email, name } = req.body;
   if (!sessionId || !code) {
-    return res.status(400).json({ error: 'Session ID dan Kode Otorisasi harus diisi' });
+    return res.status(400).json({ error: 'Kode otorisasi wajib diisi' });
   }
 
   const session = pendingLoginSessions.get(sessionId);
   if (!session || !session.ptyProcess) {
-    return res.status(404).json({ error: 'Sesi login telah kedaluwarsa. Silakan mulai ulang.' });
+    return res.status(404).json({ error: 'Sesi login telah kedaluwarsa. Silakan mulai kembali.' });
   }
 
   const cleanCode = code.trim();
@@ -364,7 +303,7 @@ app.post('/api/profiles/submit-code', authenticateRequest, async (req, res) => {
     let checkCount = 0;
     const interval = setInterval(() => {
       checkCount++;
-      const hasToken = isProfileAuthenticated(session.profileId);
+      const hasToken = isPrimaryAuthenticated();
       const isBufferSuccess = session.buffer.includes('Signed in') || session.buffer.includes('Welcome') || session.buffer.includes('signed in');
       const isBufferError = session.buffer.includes('invalid') || session.buffer.includes('Invalid') || session.buffer.includes('failed to authenticate');
 
@@ -373,15 +312,21 @@ app.post('/api/profiles/submit-code', authenticateRequest, async (req, res) => {
         resolve({ success: true });
       } else if (isBufferError && checkCount >= 4) {
         clearInterval(interval);
-        resolve({ success: false, error: 'Kode otorisasi tidak valid atau telah kedaluwarsa' });
+        resolve({ success: false, error: 'Kode otorisasi yang dimasukkan tidak valid atau sudah kedaluwarsa' });
       } else if (checkCount >= 12) {
         clearInterval(interval);
-        resolve({ success: hasToken, error: 'Waktu verifikasi habis' });
+        resolve({ success: hasToken, error: 'Waktu tunggu verifikasi telah habis' });
       }
     }, 1000);
   });
 
   const verificationResult = await verificationPromise;
+
+  let detectedEmail = (email || session.emailDraft || '').trim();
+  const emailMatch = session.buffer.match(/Signed in as\s+([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
+  if (emailMatch) {
+    detectedEmail = emailMatch[1];
+  }
 
   try {
     session.ptyProcess.kill();
@@ -389,99 +334,77 @@ app.post('/api/profiles/submit-code', authenticateRequest, async (req, res) => {
   pendingLoginSessions.delete(sessionId);
 
   if (verificationResult.success) {
-    setActiveProfileGlobal(session.profileId);
+    const identity = readIdentity();
+    identity.email = detectedEmail || identity.email || 'Akun Google Terverifikasi';
+    if (name) identity.name = name.trim();
+    identity.status = 'connected';
+    identity.createdAt = new Date().toISOString();
+    identity.lastVerifiedAt = new Date().toISOString();
+    writeIdentity(identity);
+
+    ensureGlobalSymlink();
+
     return res.json({
       success: true,
-      message: 'Akun berhasil terautentikasi dan dijadikan akun aktif di VPS'
+      identity,
+      message: 'Akun Google berhasil terhubung ke Antigravity CLI'
     });
   }
 
   return res.status(400).json({
-    error: verificationResult.error || 'Gagal memverifikasi kode otorisasi'
+    error: verificationResult.error || 'Verifikasi kode otorisasi gagal'
   });
 });
 
-app.post('/api/profiles/logout', authenticateRequest, (req, res) => {
-  const { profileId } = req.body;
-  if (!profileId) {
-    return res.status(400).json({ error: 'Profile ID harus diisi' });
-  }
-
-  const profileDir = path.join(PROFILES_DIR, profileId);
-  const geminiDir = path.join(profileDir, '.gemini');
-
+app.post('/api/auth/disconnect', authenticateRequest, (req, res) => {
   try {
-    if (fs.existsSync(geminiDir)) {
-      fs.rmSync(geminiDir, { recursive: true, force: true });
-      fs.mkdirSync(geminiDir, { recursive: true });
+    if (fs.existsSync(PRIMARY_GEMINI_DIR)) {
+      fs.rmSync(PRIMARY_GEMINI_DIR, { recursive: true, force: true });
+      fs.mkdirSync(path.join(PRIMARY_GEMINI_DIR, 'antigravity-cli'), { recursive: true });
     }
-  } catch (err) {
-    return res.status(500).json({ error: 'Gagal membersihkan sesi akun' });
-  }
 
-  return res.json({ success: true, message: 'Akun berhasil di-logout' });
-});
+    const identity = readIdentity();
+    identity.status = 'disconnected';
+    identity.lastVerifiedAt = new Date().toISOString();
+    writeIdentity(identity);
 
-app.delete('/api/profiles/:id', authenticateRequest, (req, res) => {
-  const { id } = req.params;
-  if (id === 'default') {
-    return res.status(400).json({ error: 'Profil default tidak boleh dihapus' });
-  }
-
-  const config = readConfig();
-  if (config.activeProfileId === id) {
-    setActiveProfileGlobal('default');
-  }
-
-  let profiles = readProfiles();
-  profiles = profiles.filter((p) => p.id !== id);
-  writeProfiles(profiles);
-
-  const profileDir = path.join(PROFILES_DIR, id);
-  try {
-    if (fs.existsSync(profileDir)) {
-      fs.rmSync(profileDir, { recursive: true, force: true });
-    }
-  } catch {}
-
-  return res.json({ success: true });
-});
-
-app.get('/api/system/status', authenticateRequest, (req, res) => {
-  const uptimeSeconds = os.uptime();
-  const totalMem = os.totalmem();
-  const freeMem = os.freemem();
-  const usedMem = totalMem - freeMem;
-  const config = readConfig();
-
-  exec('which agy', (error, stdout) => {
-    const agyPath = stdout.trim() || 'agy';
     return res.json({
-      platform: os.platform(),
-      hostname: os.hostname(),
-      uptime: uptimeSeconds,
-      memory: {
-        totalMb: Math.round(totalMem / (1024 * 1024)),
-        usedMb: Math.round(usedMem / (1024 * 1024)),
-        freeMb: Math.round(freeMem / (1024 * 1024))
-      },
-      agyPath,
-      activeProfileId: config.activeProfileId
+      success: true,
+      message: 'Akun berhasil diputuskan dari Antigravity CLI'
     });
-  });
+  } catch {
+    return res.status(500).json({ error: 'Gagal memutuskan akun' });
+  }
 });
 
 app.post('/api/system/test-cli', authenticateRequest, (req, res) => {
-  exec('agy models', { timeout: 8000 }, (error, stdout, stderr) => {
+  ensureGlobalSymlink();
+
+  const isWindows = os.platform() === 'win32';
+  const testCmd = isWindows ? 'agy models' : `HOME='${PRIMARY_PROFILE_DIR}' agy models`;
+
+  exec(testCmd, { timeout: 8000 }, (error, stdout, stderr) => {
     const output = (stdout || stderr || '').trim();
     const isReady = output.includes('Gemini') || output.includes('Available models');
+
+    const identity = readIdentity();
+    if (isReady) {
+      identity.status = 'connected';
+      identity.lastVerifiedAt = new Date().toISOString();
+      writeIdentity(identity);
+    } else {
+      identity.status = 'disconnected';
+      writeIdentity(identity);
+    }
+
     return res.json({
       success: !error && isReady,
-      output: output.slice(0, 300)
+      output: output.slice(0, 300),
+      identity
     });
   });
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Antigravity Account Hub running on http://0.0.0.0:${PORT}`);
+  console.log(`Antigravity Identity Hub running on http://0.0.0.0:${PORT}`);
 });
