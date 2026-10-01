@@ -396,6 +396,90 @@ app.post('/api/auth/disconnect', authenticateRequest, (req, res) => {
   }
 });
 
+// ── Decodes Google id_token (JWT, 3 segments) → { email, name, exp } ──
+function decodeGoogleIdToken() {
+  try {
+    const tokenFile = path.join(PRIMARY_GEMINI_DIR, 'antigravity-cli', 'antigravity-oauth-token');
+    if (!fs.existsSync(tokenFile)) return null;
+    const raw = JSON.parse(fs.readFileSync(tokenFile, 'utf-8'));
+    const jwt = raw.id_token || '';
+    const parts = jwt.split('.');
+    if (parts.length < 2) return null;
+    const pad = s => s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (s.length % 4)) % 4);
+    let payload = JSON.parse(Buffer.from(pad(parts[1]), 'base64').toString('utf-8'));
+    // fallback: access_token bisa berisi claims serupa
+    if (!payload.email && raw.token?.access_token) {
+      const ap = raw.token.access_token.split('.');
+      if (ap.length >= 2) {
+        try { payload = { ...payload, ...(JSON.parse(Buffer.from(pad(ap[1]), 'base64').toString('utf-8')) ) }; } catch {}
+      }
+    }
+    return {
+      email: payload.email || '',
+      name: payload.name || '',
+      sub: payload.sub || '',
+      exp: payload.exp ? new Date(payload.exp * 1000).toISOString() : null,
+      expMs: payload.exp ? payload.exp * 1000 : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+app.get('/api/account', authenticateRequest, (req, res) => {
+  const id = decodeGoogleIdToken();
+  const identity = readIdentity();
+  const now = Date.now();
+  let tokenExpiryIn = null;
+  let tokenExpired = false;
+  if (id?.expMs) {
+    tokenExpiryIn = id.expMs - now;
+    tokenExpired = tokenExpiryIn <= 0;
+  }
+  // versi agy (murah dipanggil tiap menit)
+  exec(`${AGY_BIN} --version`, { timeout: 5000 }, (verErr, verOut) => {
+    res.json({
+      ...identity,
+      google: id || {},
+      tokenExpiry: id?.exp || null,
+      tokenExpired,
+      secondsToExpiry: tokenExpiryIn != null ? Math.max(0, Math.floor(tokenExpiryIn / 1000)) : null,
+      agyVersion: (verOut || '').trim(),
+      geminiDir: PRIMARY_GEMINI_DIR,
+      tokenFile: path.join(PRIMARY_GEMINI_DIR, 'antigravity-cli', 'antigravity-oauth-token'),
+      tokenFileExists: fs.existsSync(path.join(PRIMARY_GEMINI_DIR, 'antigravity-cli', 'antigravity-oauth-token')),
+      localMode: LOCAL_MODE,
+    });
+  });
+});
+
+// Jalankan command skill Antigravity asli: agy -p "/usage"
+// (command ini ada di agy — menampilkan sisa kuota model Gemini & Claude/GPT)
+app.get('/api/usage', authenticateRequest, (req, res) => {
+  const cmd = `HOME='${PRIMARY_PROFILE_DIR}' ${AGY_BIN} -p "/usage"`;
+  exec(cmd, { timeout: 25000 }, (error, stdout, stderr) => {
+    const text = ((stdout || '') + '\n' + (stderr || '')).trim();
+    const lines = text.split('\n').filter(Boolean);
+
+    // Parse baris baku agy: "ModelGroup  LimitType  percent  resetDateTime"
+    const parsed = [];
+    for (const ln of lines) {
+      const m = ln.match(/^\s*(.+?)\t+(Weekly|Five Hour) Limit Remaining\t+(\d+)%\t+(\S+)\s*$/);
+      if (m) {
+        parsed.push({ group: m[1].trim(), type: m[2] + ' Limit', pct: parseInt(m[3], 10), reset: m[4] });
+      }
+    }
+
+    res.json({
+      ok: !error || parsed.length > 0,
+      output: text.slice(0, 4000),
+      parsed,
+      fetchedAt: new Date().toISOString(),
+      error: error && parsed.length === 0 ? (error.message || 'cmd failed') : null,
+    });
+  });
+});
+
 app.post('/api/system/test-cli', authenticateRequest, (req, res) => {
   ensureGlobalSymlink();
 

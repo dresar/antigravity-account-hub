@@ -1,5 +1,6 @@
 let currentIdentity = null;
 let activeSessionId = null;
+let detailTimer = null; // interval 60 detik untuk panel detail
 
 const authOverlay = document.getElementById('authOverlay');
 const authForm = document.getElementById('authForm');
@@ -86,6 +87,8 @@ async function checkAuthStatus() {
     if (data.authenticated) {
       authOverlay.classList.add('hidden');
       await loadIdentity();
+      loadAccountDetails();
+      startDetailTimer();
     } else {
       authOverlay.classList.remove('hidden');
       pinInput.value = '';
@@ -237,6 +240,7 @@ btnDisconnect.addEventListener('click', async () => {
       showToast('Sambungan akun berhasil diputuskan');
       cliTestOutput.classList.add('hidden');
       await loadIdentity();
+      loadAccountDetails();
     } else {
       showToast(data.error || 'Gagal memutuskan akun', true);
     }
@@ -340,6 +344,7 @@ btnSubmitCode.addEventListener('click', async () => {
       showToast(data.message || 'Akun Google berhasil terhubung');
       cliTestOutput.classList.add('hidden');
       await loadIdentity();
+      loadAccountDetails();
     } else {
       alert(data.error || 'Verifikasi kode otorisasi gagal');
     }
@@ -359,4 +364,106 @@ window.addEventListener('DOMContentLoaded', () => {
     window.lucide.createIcons();
   }
   checkAuthStatus();
+});
+
+// ── Panel Detail Akun & Sisa Kuota ──────────────────────────────
+
+function $(id) { return document.getElementById(id); }
+
+function fmtCountdown(totalSec) {
+  if (totalSec == null) return '-';
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  return h > 0 ? `${h} jam ${m} menit` : m > 0 ? `${m} menit ${s} detik` : `${s} detik`;
+}
+
+function fmtPctBar(pct) {
+  // sisa kuota: hijau >=50, kuning 15-49, merah <15
+  if (pct >= 50) return 'bg-emerald-500';
+  if (pct >= 15) return 'bg-amber-500';
+  return 'bg-rose-500';
+}
+
+async function loadAccountDetails() {
+  const [accRes, useRes] = await Promise.all([
+    fetch('/api/account').catch(() => null),
+    fetch('/api/usage').catch(() => null),
+  ]);
+
+  if (accRes && accRes.ok) {
+    const a = await accRes.json();
+
+    // email & nama
+    const emailEl = $('accountEmailDetail');
+    if (a.google?.email) {
+      emailEl.textContent = a.google.email;
+      emailEl.title = a.google.email;
+    } else {
+      emailEl.textContent = a.email || '-';
+      emailEl.title = '';
+    }
+    $('accountNameDetail').textContent = a.google?.name || a.name || '-';
+    $('accountAgyVersion').textContent = a.agyVersion || '-';
+
+    // path kredensial global CLI (dinamis per VPS)
+    const gdirEl = $('sysGeminiDir');
+    if (gdirEl && a.geminiDir) gdirEl.textContent = a.geminiDir;
+
+    // status token
+    const stateEl = $('accountTokenState');
+    const expiryEl = $('accountTokenExpiry');
+    if (!a.tokenFileExists) {
+      stateEl.textContent = 'Tidak Ada Token';
+      stateEl.className = 'font-mono font-semibold text-slate-500';
+      expiryEl.textContent = 'login Google diperlukan';
+    } else if (a.secondsToExpiry != null) {
+      const soon = a.secondsToExpiry < 120;
+      stateEl.textContent = a.tokenExpired ? 'Hangus' : (soon ? 'Segera Hangus' : 'Aktif');
+      stateEl.className = 'font-mono font-semibold ' + (a.tokenExpired ? 'text-rose-400' : soon ? 'text-amber-400' : 'text-emerald-400');
+      expiryEl.textContent = `hangus dalam ${fmtCountdown(a.secondsToExpiry)} • ${a.tokenExpiry ? new Date(a.tokenExpiry).toLocaleString('id-ID') : ''}`;
+    } else {
+      stateEl.textContent = 'Aktif';
+      stateEl.className = 'font-mono font-semibold text-emerald-400';
+      expiryEl.textContent = 'refresh otomatis tersedia';
+    }
+  }
+
+  if (useRes && useRes.ok) {
+    const u = await useRes.json();
+    const wrap = $('usageBarsWrap');
+    if (u.parsed && u.parsed.length) {
+      wrap.innerHTML = u.parsed.map(row => `
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-[11px] text-slate-300">${row.group} — ${row.type}</span>
+            <span class="font-mono text-[11px] font-bold ${row.pct >= 50 ? 'text-emerald-400' : row.pct >= 15 ? 'text-amber-400' : 'text-rose-400'}">${row.pct}%</span>
+          </div>
+          <div class="h-1.5 rounded-full bg-surface-panel border border-surface-border/50 overflow-hidden">
+            <div class="h-full rounded-full transition-all duration-500 ${fmtPctBar(row.pct)}" style="width:${Math.min(100, Math.max(2, row.pct))}%"></div>
+          </div>
+        </div>`).join('');
+      $('detailUpdatedAt').textContent = 'perbarui ' + new Date().toLocaleTimeString('id-ID');
+    } else {
+      wrap.innerHTML = `<div class="text-[11px] text-amber-400">${u.error || 'Kuota tidak dapat dibaca'}. Kelihatannya akun belum login.</div>`;
+    }
+  }
+}
+
+$('btnRefreshDetail').addEventListener('click', async () => {
+  loadAccountDetails();
+});
+
+function startDetailTimer() {
+  if (detailTimer) clearInterval(detailTimer);
+  detailTimer = setInterval(() => {
+    // refresh hanya jika user sedang membuka dashboard (overlay PIN tertutup & tab terlihat)
+    const dashboardVisible = !document.hidden && authOverlay.classList.contains('hidden');
+    if (!dashboardVisible) return;
+    loadAccountDetails();
+  }, 60000);
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && authOverlay.classList.contains('hidden')) loadAccountDetails();
 });
